@@ -109,7 +109,6 @@ vector<double> getFrenet(double x,
     double frenet_d = distance(x_x, x_y, proj_x, proj_y);
 
     // see if d value is positive or negative by comparing it to a center point
-
     double center_x = 1000-maps_x[prev_wp];
     double center_y = 2000-maps_y[prev_wp];
     double centerToPos = distance(center_x, center_y, x_x, x_y);
