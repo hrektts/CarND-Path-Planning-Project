@@ -9,6 +9,7 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
 #include "spline.h"
+#include "jmt.h"
 
 using std::ifstream;
 using std::istringstream;
