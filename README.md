@@ -1,6 +1,44 @@
 # CarND-Path-Planning-Project
 Self-Driving Car Engineer Nanodegree Program
+
+### Model Documentation
+
+The model selects an action from the following three choices:
+
+- Keeping current lane
+- Going to right lane
+- Going to left lane
+
+Each action is evaluated by the cost function for each control cycle, and the action with the lowest cost is selected as the next action. Apart from the selection of the action, the speed control is performed independently.
+
+#### Speed control
+
+The model monitors the speed of the car running in front of the ego car. If the speed of the leading car is slower than the ego car, the ego car decreases its speed with the specified acceleration. Otherwise, the ego car increases its speed by the specified acceleration.
+
+#### Trajectory calculation
+
+The trajectory that the ego car follows is calculated using a spline function. The spline function is calculated using five points, two of which are the points the ego car has just passed, and the remaining points are the nearest three way points on the specified lane of the given trajectory.
+
+#### Cost function for the action selection
+
+The costs of actions are calculated from the following points of view:
+
+1. Collision free
    
+   The ego car should not cause an accident. The trajectory to be followed by ego car is compared with the trajectories of the leading car and the following car. If the distance of the trajectories is closer than the specified distance, a penalty is imposed on the action that uses the trajectory.
+
+1. Obstacle free
+   
+   If there is a leading car whose speed is slower than the ego car, or a following car whose speed is faster than the ego car, the action that selects the lane is penalized.
+
+1. Unnecessary lane change
+   
+   Less lane change is better.
+
+---
+
+\* The following is the original document by Udacity.
+
 ### Simulator.
 You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases).
 
