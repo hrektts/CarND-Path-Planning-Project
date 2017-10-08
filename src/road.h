@@ -26,6 +26,7 @@ class Road {
     int ClosestWaypoint(double x, double y);
     int DToLane(double d) const;
     double LaneToD(int lane) const;
+    bool OutOfLane(double d) const;
     vector<double> GetFrenet(double x, double y, double theta);
     vector<double> GetXY(double s, double d) const;
     int NextWaypoint(double x, double y, double theta);

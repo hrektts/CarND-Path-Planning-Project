@@ -50,6 +50,15 @@ double Road::LaneToD(int lane) const {
     return static_cast<double>(lane) * lane_width + lane_width / 2.;
 }
 
+bool Road::OutOfLane(double d) const {
+    double pos_in_lane = d - (double)DToLane(d) * lane_width;
+    if (pos_in_lane < (lane_width * 0.25) || pos_in_lane > (lane_width * 0.75)) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 int Road::NextWaypoint(double x, double y, double theta) {
     int closestWaypoint = ClosestWaypoint(x, y);
 

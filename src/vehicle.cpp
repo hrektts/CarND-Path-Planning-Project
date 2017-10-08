@@ -17,6 +17,7 @@ Vehicle::Vehicle(double v_ref, double v_max, double a_max, size_t history_size) 
     this->v_max = v_max;
     this->a_max = a_max;
     this->history_size = history_size;
+    this->line_kept = 1;
 }
 
 Vehicle::~Vehicle() {}
@@ -100,6 +101,7 @@ vector<vector<double> > Vehicle::CalcTrajectory(const vector<vector<double> > &o
     double cost = 10000;
     vector<vector<double> > traj;
     double new_v;
+    int new_lane = 0;
     std::cout << "*********************************" << std::endl;
 
     for (auto l : lanes) {
@@ -146,9 +148,17 @@ vector<vector<double> > Vehicle::CalcTrajectory(const vector<vector<double> > &o
             cost = c;
             traj = tss;
             new_v = v;
+            new_lane = l;
         }
     }
     v_ref = new_v;
+    if (new_lane == 0) {
+        if (line_kept < 250) {
+            line_kept += 1;
+        }
+    } else {
+        line_kept = 1;
+    }
 
     return traj;
 }
@@ -162,50 +172,64 @@ double Vehicle::CalcCost(const vector<vector<double> > &trajectory,
     double cost = 0;
 
     if (!leader_state.empty()) {
-        /*
         Vehicle leader = Vehicle(0, 0, 0, 1);
-        double psi_leader = rad2deg(atan2(leader_state[3], leader_state[4]));
+        double v_leader = sqrt(leader_state[3] * leader_state[3]
+                               + leader_state[4] * leader_state[4]);
+        double psi_leader = rad2deg(atan2(leader_state[4], leader_state[3]));
         leader.Update({leader_state[1],
                         leader_state[2],
                         leader_state[5],
                         leader_state[6],
+                        v_leader,
                         psi_leader},
             {}, {});
-        */
-        double v_leader = mph2mps(sqrt(leader_state[3] * leader_state[3]
-                                       + leader_state[4] * leader_state[4]));
-        /*
         auto leader_trajectory = leader.Trajectory(v_leader, road, keep_lane);
-        for (size_t i=0; i < leader_trajectory[0].size(); i++) {
-            std::cout << leader_trajectory[0][i] << ", " << leader_trajectory[1][i] << std::endl;
+
+        size_t check_size = std::min(trajectory[0].size(), leader_trajectory[0].size());
+        for (size_t i = 0; i < check_size; i++) {
+            if (distance(trajectory[0][i], trajectory[1][i],
+                         leader_trajectory[0][i], leader_trajectory[1][i])
+                < check_range_front) {
+                cost += 1000;
+                break;
+            }
         }
-        */
+
         if (v_leader < V()) {
-            cost += std::max(-10 / (PreferredBuffer() * 3) * (leader_state[5] - S()) + 10, 0.);
+            cost += std::max(-100 / (PreferredBuffer() * 3) * (leader_state[5] - S()) + 100, 0.);
         }
     }
 
     if (!follower_state.empty()) {
-        /*
         Vehicle follower = Vehicle(0, 0, 0, 1);
-        double psi_follower = atan2(follower_state[3], follower_state[4]);
+        double v_follower = sqrt(follower_state[3] * follower_state[3]
+                                 + follower_state[4] * follower_state[4]);
+        double psi_follower = rad2deg(atan2(follower_state[4], follower_state[3]));
         follower.Update({follower_state[1],
                         follower_state[2],
                         follower_state[5],
                         follower_state[6],
+                        v_follower,
                         psi_follower},
             {}, {});
-        */
-        double v_follower = mph2mps(sqrt(follower_state[3] * follower_state[3]
-                                         + follower_state[4] * follower_state[4]));
-        //auto follower_trajectory = follower.Trajectory(v_follower, road, keep_lane);
+        auto follower_trajectory = follower.Trajectory(v_follower, road, keep_lane);
 
-        if (v_follower > V()) {
-            cost += std::max(10 / (PreferredBuffer() * 3) * (follower_state[5] - S()) + 10, 0.);
+        size_t check_size = std::min(trajectory[0].size(), follower_trajectory[0].size());
+        for (size_t i = 0; i < check_size; i++) {
+            if (distance(trajectory[0][i], trajectory[1][i],
+                         follower_trajectory[0][i], follower_trajectory[1][i])
+                < check_range_rear) {
+                cost += 1000;
+                break;
+            }
+        }
+
+        if (v_follower > V() && lane != 0) {
+            cost += std::max(100 / (PreferredBuffer() * 3) * (follower_state[5] - S()) + 100, 0.);
         }
     }
 
-    cost += abs(lane) * 2;
+    cost += abs(lane) * 10;
 
     return cost;
 }
@@ -312,50 +336,7 @@ vector<vector<double> > Vehicle::Trajectory(double ref_vel,
 
     return {next_x_vals, next_y_vals};
 }
-/*
-vector<double> Vehicle::StepsToFollowLeader(vector<double> leader_state,
-                                            double control_period,
-                                            int num_period_latancy) const {
-    double t = TimeToCatchUpLeader(leader_state);
-    vector<double> steps{};
-    if (t < 0) {
-        return steps;
-    }
 
-    double v_ego;
-    if (previous_path_x.size() > 1) {
-        double diff_x = previous_path_x.back() - previous_path_x.end()[-2];
-        double diff_y = previous_path_y.back() - previous_path_y.end()[-2];
-        v_ego = sqrt(diff_x*diff_x + diff_y*diff_y) / control_period;
-    } else {
-        v_ego = V();
-    }
-    double v_leader = mph2mps(sqrt(leader_state[3]*leader_state[3]
-                                   + leader_state[4]*leader_state[4]));
-    std::cout << "s: " << S() << ", v: " << v_ego << std::endl;
-    std::cout << "leader s: " << leader_state[5] << ", leader v: " << v_leader << std::endl;
-
-    auto coeff = Jmt({0, v_ego, 0},
-                     {leader_state[5] - S() - control_period * num_period_latancy * v_ego,// - PreferredBuffer(),
-                                 v_leader,
-                                 0},
-                     t);
-    double max_t = std::min(t, 1.);
-    std::cout << "aaaaa" << t << std::endl;
-    for (double i = 0; i < max_t; i += control_period) {
-        double t2 = i * i;
-        double t3 = t2 * i;
-        double t4 = t3 * i;
-        double t5 = t4 * i;
-        double v = coeff[0] + coeff[1] * i + coeff[2] * t2 +
-                   coeff[3] * t3 + coeff[4] * t4 + coeff[5] * t5;
-        steps.push_back(v);
-        std::cout << "pushed" << i << " " << v <<" " << control_period<< std::endl;
-    }
-
-    return steps;
-}
-*/
 void Vehicle::Update(const vector<double> &state,
                      const vector<double> &previous_path_x,
                      const vector<double> &previous_path_y) {
@@ -366,209 +347,4 @@ void Vehicle::Update(const vector<double> &state,
 
     this->previous_path_x = previous_path_x;
     this->previous_path_y = previous_path_y;
-}
-
-void Vehicle::Configure(vector<int> road_data) {
-    /*
-      Called by simulator before simulation begins. Sets various
-      parameters which will impact the ego vehicle.
-    */
-    //target_speed = road_data[0];
-    lanes_available = road_data[1];
-    goal_s = road_data[2];
-    goal_lane = road_data[3];
-    max_acceleration = road_data[4];
-}
-
-string Vehicle::Display() {
-    ostringstream oss;
-
-    oss << "s:    " << this->s << "\n";
-    oss << "lane: " << this->lane << "\n";
-    oss << "v:    " << this->v << "\n";
-    oss << "a:    " << this->a << "\n";
-
-    return oss.str();
-}
-
-void Vehicle::Increment(int dt = 1) {
-    this->s += this->v * dt;
-    this->v += this->a * dt;
-}
-
-vector<int> Vehicle::StateAt(int t) {
-    /*
-      Predicts state of vehicle in t seconds (assuming constant acceleration)
-    */
-    int s = this->s + this->v * t + this->a * t * t / 2;
-    int v = this->v + this->a * t;
-    return {this->lane, s, v, this->a};
-}
-
-bool Vehicle::CollidesWith(Vehicle other, int at_time) {
-    /*
-      Simple collision detection.
-    */
-    vector<int> check1 = StateAt(at_time);
-    vector<int> check2 = other.StateAt(at_time);
-    return (check1[0] == check2[0]) && (abs(check1[1]-check2[1]) <= L);
-}
-
-Vehicle::collider Vehicle::WillCollideWith(Vehicle other, int timesteps) {
-    Vehicle::collider collider_temp;
-    collider_temp.collision = false;
-    collider_temp.time = -1;
-
-    for (int t = 0; t < timesteps+1; t++) {
-        if (CollidesWith(other, t)) {
-            collider_temp.collision = true;
-            collider_temp.time = t;
-            return collider_temp;
-        }
-    }
-
-    return collider_temp;
-}
-
-void Vehicle::RealizeState(map<int, vector<vector<int> > > predictions) {
-    /*
-      Given a state, realize it by adjusting acceleration and lane.
-      Note - lane changes happen instantaneously.
-    */
-    string state = this->state;
-    if (state.compare("CS") == 0) {
-        RealizeConstantSpeed();
-    } else if (state.compare("KL") == 0) {
-        RealizeKeepLane(predictions);
-    } else if (state.compare("LCL") == 0) {
-        RealizeLaneChange(predictions, "L");
-    } else if (state.compare("LCR") == 0) {
-        RealizeLaneChange(predictions, "R");
-    } else if (state.compare("PLCL") == 0) {
-        RealizePrepLaneChange(predictions, "L");
-    } else if (state.compare("PLCR") == 0) {
-        RealizePrepLaneChange(predictions, "R");
-    }
-}
-
-void Vehicle::RealizeConstantSpeed() {
-    a = 0;
-}
-
-int Vehicle::_MaxAccelForLane(map<int, vector<vector<int> > > predictions,
-                                 int lane,
-                                 int s) {
-    int delta_v_til_target = target_speed - v;
-    int max_acc = std::min(max_acceleration, delta_v_til_target);
-
-    map<int, vector<vector<int> > >::iterator it = predictions.begin();
-    vector<vector<vector<int> > > in_front;
-    while (it != predictions.end()) {
-        int v_id = it->first;
-
-        vector<vector<int> > v = it->second;
-
-        if ((v[0][0] == lane) && (v[0][1] > s)) {
-            in_front.push_back(v);
-        }
-        it++;
-    }
-
-    if (in_front.size() > 0) {
-        int min_s = 1000;
-        vector<vector<int> > leading = {};
-        for (int i = 0; i < in_front.size(); i++) {
-            if ((in_front[i][0][1]-s) < min_s) {
-                min_s = (in_front[i][0][1]-s);
-                leading = in_front[i];
-            }
-        }
-
-        int next_pos = leading[1][1];
-        int my_next = s + this->v;
-        int separation_next = next_pos - my_next;
-        int available_room = separation_next - preferred_buffer;
-        max_acc = std::min(max_acc, available_room);
-    }
-
-    return max_acc;
-}
-
-void Vehicle::RealizeKeepLane(map<int, vector<vector<int> > > predictions) {
-    this->a = _MaxAccelForLane(predictions, this->lane, this->s);
-}
-
-void Vehicle::RealizeLaneChange(map<int, vector<vector<int> > > predictions,
-                                  string direction) {
-    int delta = -1;
-    if (direction.compare("L") == 0) {
-        delta = 1;
-    }
-    this->lane += delta;
-    int lane = this->lane;
-    int s = this->s;
-    this->a = _MaxAccelForLane(predictions, lane, s);
-}
-
-void Vehicle::RealizePrepLaneChange(map<int, vector<vector<int> > > predictions,
-                                    string direction) {
-    int delta = -1;
-    if (direction.compare("L") == 0) {
-        delta = 1;
-    }
-    int lane = this->lane + delta;
-
-    map<int, vector<vector<int> > >::iterator it = predictions.begin();
-    vector<vector<vector<int> > > at_behind;
-    while (it != predictions.end()) {
-        int v_id = it->first;
-        vector<vector<int> > v = it->second;
-
-        if ((v[0][0] == lane) && (v[0][1] <= this->s)) {
-            at_behind.push_back(v);
-        }
-        it++;
-    }
-    if (at_behind.size() > 0) {
-        int max_s = -1000;
-        vector<vector<int> > nearest_behind = {};
-        for (int i = 0; i < at_behind.size(); i++) {
-            if ((at_behind[i][0][1]) > max_s) {
-                max_s = at_behind[i][0][1];
-                nearest_behind = at_behind[i];
-            }
-        }
-        int target_vel = nearest_behind[1][1] - nearest_behind[0][1];
-        int delta_v = this->v - target_vel;
-        int delta_s = this->s - nearest_behind[0][1];
-        if (delta_v != 0) {
-            int time = -2 * delta_s/delta_v;
-            int a;
-            if (time == 0) {
-                a = this->a;
-            } else {
-                a = delta_v/time;
-            }
-            if (a > this->max_acceleration) {
-                a = this->max_acceleration;
-            }
-            if (a < -this->max_acceleration) {
-                a = -this->max_acceleration;
-            }
-            this->a = a;
-        } else {
-            int my_min_acc = std::max(-this->max_acceleration, -delta_s);
-            this->a = my_min_acc;
-        }
-    }
-}
-
-vector<vector<int> > Vehicle::GeneratePredictions(int horizon = 10) {
-    vector<vector<int> > predictions;
-    for (int i = 0; i < horizon; i++) {
-        vector<int> check1 = StateAt(i);
-        vector<int> lane_s = {check1[0], check1[1]};
-        predictions.push_back(lane_s);
-    }
-    return predictions;
 }

@@ -22,38 +22,17 @@ using std::vector;
 
 class Vehicle {
  public:
-    struct collider {
-        bool collision;  // is there a collision?
-        int  time;  // time collision happens
-    };
+    int line_kept;
 
-    int L = 1;
+    double check_range_front = 10;
 
-    double preferred_buffer;
-
-    int lane;
-
-    int s;
-
-    int v;
-
-    int a;
-
-    int target_speed;
+    double check_range_rear = 10;
 
     double v_ref;
 
     double v_max;
 
     double a_max;
-
-    int lanes_available;
-
-    int max_acceleration;
-
-    int goal_lane;
-
-    int goal_s;
 
     double s_to_check;
 
@@ -123,8 +102,6 @@ class Vehicle {
 
     bool RequireAttention(const vector<double> &other_state) const;
 
-    //double TimeToCatchUpLeader(vector<double> leader_state) const;
-
     vector<vector<double> > CalcTrajectory(const vector<vector<double> > &others,
                                            const Road &road);
 
@@ -138,40 +115,9 @@ class Vehicle {
                                        const Road &road,
                                        int lane);
 
-    vector<double> StepsToFollowLeader(vector<double> leader_state,
-                                       double control_period,
-                                       int num_period_latancy) const;
-
     void Update(const vector<double> &state,
                 const vector<double> &previous_path_x,
                 const vector<double> &previous_path_y);
-
-    void Configure(vector<int> road_data);
-
-    string Display();
-
-    void Increment(int dt);
-
-    vector<int> StateAt(int t);
-
-    bool CollidesWith(Vehicle other, int at_time);
-
-    collider WillCollideWith(Vehicle other, int timesteps);
-
-    void RealizeState(map<int, vector<vector<int> > > predictions);
-
-    void RealizeConstantSpeed();
-
-    int _MaxAccelForLane(map<int, vector<vector<int> > > predictions, int lane, int s);
-
-    void RealizeKeepLane(map<int, vector<vector<int> > > predictions);
-
-    void RealizeLaneChange(map<int, vector<vector<int> > > predictions, string direction);
-
-    void RealizePrepLaneChange(map<int, vector<vector<int> > > predictions,
-                               string direction);
-
-    vector<vector<int>> GeneratePredictions(int horizon);
 };
 
 #endif  // VEHICLE_H_
